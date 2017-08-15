@@ -1,0 +1,124 @@
+---
+title: Analysis of U.S. National Oceanic and Atmospheric Administration's (NOAA)
+author: "FFadel"
+date: "August 14, 2017"
+output:
+  html_document:
+  fig_caption: yes
+  html_notebook: default
+  pdf_document: default
+---
+### Sypnosis
+This report provide analysis on the type of weather events and the severity of those of harm caused to health and the economy. the NOAA storm data represents the period from 1950 to 2011 where we concluded that tornadoes had the highest fatalities and injuries, while flood caused the largest financial impact (crop and property) through that period.
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+```
+### Data Processing
+The data can be directly retrieved using the following [url](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2]). The  script automatically get the data file in bzip (compressed format) and the proceses directly using the `read.csv()` and `bzip()` functions combined which get stored into the `StormData` 
+## download files decompress
+```{r data, cache=TRUE}
+#file url
+url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+
+#filename to be read
+filename <- "./repdata_data_StormData.csv.bz2"
+
+#check if file already exists otherwise download
+if(!file.exists(filename)){
+  download.file(url,"./repdata_data_StormData.csv.bz2")
+}
+
+#read data into StormData
+StormData <- read.csv(bzfile(filename),header=TRUE, stringsAsFactors=FALSE)
+```
+
+Verify Data
+```{r check data}
+#verify data loaded correctly
+head(StormData)
+```
+
+Cleaning and correcting the features `PROPDMGEXP` and `CROPDMGEXP`, some of the values entered are non numeric and require correction. `B,M,K and H` values  
+```{r data cleaning}
+unique(StormData$PROPDMGEXP)
+unique(StormData$CROPDMGEXP)
+
+#correct values
+StormData[StormData$PROPDMGEXP == "K" & StormData$PROPDMGEXP == "k", "PROPDMGEXP"] <- "3"
+StormData[StormData$PROPDMGEXP == "M" & StormData$PROPDMGEXP == "m", "PROPDMGEXP"] <- "6"
+StormData[StormData$PROPDMGEXP == "B" & StormData$PROPDMGEXP == "b", "PROPDMGEXP"] <- "9"
+StormData[StormData$PROPDMGEXP == "H" & StormData$PROPDMGEXP == "h", "PROPDMGEXP"] <- "2"
+StormData[!StormData$PROPDMGEXP %in% c(0:9), "PROPDMGEXP"] <- "0"
+
+StormData[StormData$CROPDMGEXP == "K" & StormData$CROPDMGEXP == "k", "CROPDMGEXP"] <- "3"
+StormData[StormData$CROPDMGEXP == "M" & StormData$CROPDMGEXP == "m", "CROPDMGEXP"] <- "6"
+StormData[StormData$CROPDMGEXP == "B" & StormData$CROPDMGEXP == "b", "CROPDMGEXP"] <- "9"
+StormData[StormData$CROPDMGEXP == "H" & StormData$CROPDMGEXP == "h", "CROPDMGEXP"] <- "2"
+StormData[!StormData$CROPDMGEXP %in% c(0:9),]$CROPDMGEXP <- "0"
+```
+
+### Data Analysis
+
+```{r Storm Fatalities Summary}
+StormFatalities <- aggregate(FATALITIES ~ EVTYPE, data=StormData, sum)
+names(StormFatalities) <- c("EVTYPE","FATALITIES")
+attach(StormFatalities)
+StormFatalities[which.max(FATALITIES),]
+StormFatalities <- StormFatalities[order(-StormFatalities$FATALITIES),][1:10, ]
+StormFatalities$EVTYPE <- factor(StormFatalities$EVTYPE, levels=StormFatalities$EVTYPE)
+```
+
+```{r Storm Injuries Summary}
+StormInjuries <- aggregate(INJURIES ~ EVTYPE, data=StormData, sum)
+names(StormInjuries) <- c("EVTYPE","INJURIES")
+attach(StormInjuries)
+StormInjuries[which.max(INJURIES),]
+StormInjuries <- StormInjuries[order(-StormInjuries$INJURIES),][1:10,]
+StormInjuries$EVTYPE <- factor(StormInjuries$EVTYPE, levels=StormInjuries$EVTYPE)
+```
+### Note: Alphabetical characters used to signify magnitude include "K" for thousands, "M" for millions, and "B" for billions  
+```{r Total Damage Calcaulation}
+#calculate total damage cost
+TOTALDMGCOST <-  StormData$PROPDMG * 10 ** as.numeric(StormData$PROPDMGEXP) +
+                 StormData$CROPDMG * 10 ** as.numeric(StormData$CROPDMGEXP)
+
+#append total damage cost to StormData
+StormData <- cbind(StormData,TOTALDMGCOST)
+```
+
+```{r Storm Damage Summary}
+StormDamages <- aggregate(TOTALDMGCOST ~ EVTYPE, data=StormData, sum)
+names(StormDamages) <- c("EVTYPE","TOTALDMGCOST")
+StormDamages <- StormDamages[order(-StormDamages$TOTALDMGCOST),][1:10,]
+StormDamages$EVTYPE <- factor(StormDamages$EVTYPE, levels=StormDamages$EVTYPE)
+```
+
+### Results
+The respective plots calrify that Tornado (plot 1 & 2) has the highest fatalities and injuries, while flashflooding has more damage impact on properties and crops.
+```{r plots}
+#plot1 - Top 10 Events by Fatalities
+ggplot(StormFatalities, aes(EVTYPE,FATALITIES)) + 
+      geom_bar(stat="identity", fill="firebrick") + 
+      theme(axis.text.x=element_text(angle=90, hjust=1)) + 
+      xlab("Event Type") + 
+      ylab("Fatalities") + 
+      ggtitle("Top 10 Highest Weather Events with Highest Fatalities")
+
+#plot2 - Top 10 Events by Injuries
+ggplot(StormInjuries, aes(EVTYPE,INJURIES)) +
+      geom_bar(stat="identity", fill="firebrick4") + 
+      theme(axis.text.x=element_text(angle=90, hjust=1)) + 
+      xlab("Event Type") + 
+      ylab("Injuries") + 
+      ggtitle("Top 10 Weather Events with Highest Injuries")
+
+#plo3 - Top 10 Events by Combined Crop & Property Damages
+ggplot(StormDamages, aes(EVTYPE,TOTALDMGCOST/1000000)) +
+      geom_bar(stat="identity", fill="blue") + 
+      theme(axis.text.x=element_text(angle=90, hjust=1)) + 
+      xlab("Event Type") + 
+      ylab("Damage Cost (Millions)") + 
+      ggtitle("Top 10 Weather Events with Highest Damage Cost")
+```
